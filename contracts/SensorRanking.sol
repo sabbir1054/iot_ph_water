@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.4.22 <0.9.0;
+pragma solidity >=0.8.0 <0.9.0;
 
 contract SensorRanking {
     struct Sensor {
@@ -11,49 +11,99 @@ contract SensorRanking {
     mapping(string => uint) public sensorIndex;
     uint public centralWeightPool = 50000;
 
-    constructor() {
-        addSensorReading("Sensor1", 3600, 600);
-        addSensorReading("Sensor1", 3500, 650);
-        addSensorReading("Sensor1", 3700, 550);
+    constructor() {}
 
-        addSensorReading("Sensor2", 4000, 700);
-        addSensorReading("Sensor2", 3900, 600);
-        addSensorReading("Sensor2", 4100, 550);
-
-        addSensorReading("Sensor3", 3100, 500);
-        addSensorReading("Sensor3", 3000, 600);
-        addSensorReading("Sensor3", 3200, 550);
-    }
-
-    function calculateWeight(int moisture, int ph) private pure returns (int) {
-        int moistureWeight = (3000 <= moisture && moisture <= 10000)
-            ? int(100)
-            : int(-100);
-        int phWeight = (5500 <= ph && ph <= 6500) ? int(50) : int(-50);
-        return moistureWeight + phWeight;
-    }
-
-    function addSensorReading(
-        string memory sensorId,
-        int moisture,
-        int ph
+    // New Batch Insert Function
+    function batchAddSensorReadings(
+        string[] memory sensorIds,
+        int[] memory temperatures,
+        int[] memory tdsValues,
+        int[] memory turbidities,
+        int[] memory waterLevels,
+        int[] memory phValues
     ) public {
-        int weight = calculateWeight(moisture, ph);
+        require(
+            sensorIds.length == temperatures.length &&
+            temperatures.length == tdsValues.length &&
+            tdsValues.length == turbidities.length &&
+            turbidities.length == waterLevels.length &&
+            waterLevels.length == phValues.length,
+            "Array lengths must match"
+        );
 
-        if (sensorIndex[sensorId] > 0) {
-            sensors[sensorIndex[sensorId] - 1].totalWeight += weight;
-        } else {
-            sensors.push(Sensor(sensorId, weight));
-            sensorIndex[sensorId] = sensors.length;
-        }
+        for (uint i = 0; i < sensorIds.length; i++) {
+            int weight = calculateWeight(
+                temperatures[i],
+                tdsValues[i],
+                turbidities[i],
+                waterLevels[i],
+                phValues[i]
+            );
 
-        if (weight > 0) {
-            centralWeightPool -= uint(weight);
-        } else {
-            centralWeightPool += uint(-weight);
+            if (sensorIndex[sensorIds[i]] > 0) {
+                sensors[sensorIndex[sensorIds[i]] - 1].totalWeight += weight;
+            } else {
+                sensors.push(Sensor(sensorIds[i], weight));
+                sensorIndex[sensorIds[i]] = sensors.length;
+            }
+
+            if (weight > 0) {
+                centralWeightPool -= uint(weight);
+            } else {
+                centralWeightPool += uint(-weight);
+            }
         }
     }
 
+    // New Weight Calculation Logic
+    function calculateWeight(
+        int temperature,
+        int tds,
+        int turbidity,
+        int waterLevel,
+        int ph
+    ) private pure returns (int) {
+        int weight = 0;
+
+        // Temperature: 20°C - 30°C ideal
+        if (temperature >= 20 && temperature <= 30) {
+            weight += 50;
+        } else {
+            weight -= 30;
+        }
+
+        // TDS: 300 ppm - 500 ppm ideal
+        if (tds >= 300 && tds <= 500) {
+            weight += 40;
+        } else {
+            weight -= 20;
+        }
+
+        // Turbidity: 0 - 5 NTU ideal
+        if (turbidity >= 0 && turbidity <= 5) {
+            weight += 30;
+        } else {
+            weight -= 20;
+        }
+
+        // Water Level: 50 cm - 100 cm ideal
+        if (waterLevel >= 50 && waterLevel <= 100) {
+            weight += 60;
+        } else {
+            weight -= 40;
+        }
+
+        // pH: 6 - 8 ideal
+        if (ph >= 6 && ph <= 8) {
+            weight += 70;
+        } else {
+            weight -= 50;
+        }
+
+        return weight;
+    }
+
+    // Sort sensors based on totalWeight (High to Low)
     function sortSensors() public {
         uint n = sensors.length;
         for (uint i = 0; i < n; i++) {
@@ -67,14 +117,17 @@ contract SensorRanking {
         }
     }
 
+    // Get total number of sensors
     function getSensorCount() public view returns (uint) {
         return sensors.length;
     }
 
+    // Get specific sensor details
     function getSensor(uint index) public view returns (string memory, int) {
         return (sensors[index].sensorId, sensors[index].totalWeight);
     }
 
+    // Get all sorted sensor IDs
     function getSortedSensors() public view returns (string[] memory) {
         string[] memory sensorIds = new string[](sensors.length);
         for (uint i = 0; i < sensors.length; i++) {
@@ -83,6 +136,7 @@ contract SensorRanking {
         return sensorIds;
     }
 
+    // Get remaining central pool weight
     function getCentralWeightPool() public view returns (uint) {
         return centralWeightPool;
     }
