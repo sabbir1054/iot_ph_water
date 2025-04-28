@@ -1,9 +1,8 @@
 /* eslint-disable no-unused-vars */
 import { ethers } from "ethers";
 import { useEffect, useState } from "react";
-import Papa from "papaparse";
-import CsvUploader from "./CsvUploader"; // Import the new component
 import SensorRanking from "./contracts/SensorRanking.json"; // ABI
+import UploadCsvSensor from "./CsvUploader";
 
 function App() {
   const [account, setAccount] = useState("");
@@ -103,7 +102,7 @@ function App() {
 
         {/* CSV Uploader */}
         <div className="w-full md:w-1/3">
-          <CsvUploader onUploadComplete={handleCsvUpload} />
+          <UploadCsvSensor provider={provider} account={account} />
         </div>
       </div>
 
