@@ -6,8 +6,7 @@ import SensorRanking from "./contracts/SensorRanking.json";
 function UploadCsvSensor({ provider, account }) {
   const [csvData, setCsvData] = useState([]);
   const [uploading, setUploading] = useState(false);
-  const contractAddress = SensorRanking.networks[5777].address;
-  console.log(contractAddress);
+
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -17,21 +16,19 @@ function UploadCsvSensor({ provider, account }) {
       skipEmptyLines: true,
       complete: (results) => {
         setCsvData(results.data);
-        console.log("Parsed CSV data:", results.data);
       },
     });
   };
 
   const handleUpload = async () => {
     if (!provider || !account || csvData.length === 0) {
-      alert("Missing provider, account, or no data loaded!");
+      alert("Missing provider, account, or CSV data!");
       return;
     }
 
     try {
       const signer = await provider.getSigner();
       const contractAddress = SensorRanking.networks[5777].address;
-      console.log(contractAddress);
 
       const contract = new ethers.Contract(
         contractAddress,
@@ -39,66 +36,53 @@ function UploadCsvSensor({ provider, account }) {
         signer
       );
 
-      // Prepare batch data arrays
+      // Prepare data arrays from CSV
       const sensorIds = [];
-      const temperatures = [];
-      const tdsValues = [];
-      const turbidities = [];
-      const waterLevels = [];
-      const phValues = [];
+      const temps = [];
+      const salinity = [];
+      const ph = [];
+      const nh4 = [];
+      const doValue = [];
+      const ca = [];
+
       csvData.forEach((row) => {
-        if (
-          row.sensorId !== undefined &&
-          row.temperature !== undefined &&
-          row.tds !== undefined &&
-          row.turbidity !== undefined &&
-          row.waterLevel !== undefined &&
-          row.ph !== undefined
-        ) {
-          sensorIds.push(row.sensorId);
-          temperatures.push(Number(row.temperature));
-          tdsValues.push(Number(row.tds));
-          turbidities.push(Number(row.turbidity));
-          waterLevels.push(Number(row.waterLevel));
-          phValues.push(Number(row.ph));
-        }
+        sensorIds.push(row.SensorID.toString());
+        temps.push(Math.round(parseFloat(row.Temp)));
+        salinity.push(Math.round(parseFloat(row.Salinity)));
+        ph.push(Math.round(parseFloat(row.PH) * 10));
+        nh4.push(Math.round(parseFloat(row.NH4) * 10));
+        doValue.push(Math.round(parseFloat(row.DO) * 10 + 50));
+        ca.push(Math.round(parseFloat(row.CA)));
       });
 
       setUploading(true);
 
-      // 🔥 Single batch transaction
-      console.log({
-        sensorIds,
-        temperatures,
-        tdsValues,
-        turbidities,
-        waterLevels,
-        phValues,
-      });
+      // Call the batch upload function
+      console.log(doValue.slice(0, 5));
+
       const tx = await contract.batchAddSensorReadings(
         sensorIds,
-        temperatures,
-        tdsValues,
-        turbidities,
-        waterLevels,
-        phValues
+        temps,
+        salinity,
+        ph,
+        nh4,
+        doValue,
+        ca
       );
 
       await tx.wait();
-      alert("All sensor data uploaded in one batch successfully!");
+      alert("Sensor data uploaded successfully!");
     } catch (error) {
-      console.log(error);
-      alert("Error uploading sensor data!");
+      console.error("Upload error:", error);
+      alert("Error uploading sensor data: " + error.message);
     } finally {
       setUploading(false);
     }
   };
-
+  // csvData.forEach((row) => console.log(row));
   return (
-    <div className="p-6 bg-gray-100 rounded-lg shadow-lg w-1/2">
-      <h2 className="text-xl font-bold mb-4">
-        Upload Sensor CSV (Batch Upload)
-      </h2>
+    <div className="p-6 bg-gray-100 rounded-lg shadow-lg">
+      <h2 className="text-xl font-bold mb-4">Upload Sensor CSV (Batch)</h2>
 
       <input
         type="file"

@@ -1,4 +1,3 @@
-/* eslint-disable no-unused-vars */
 import { ethers } from "ethers";
 import { useEffect, useState } from "react";
 import SensorRanking from "./contracts/SensorRanking.json"; // ABI
@@ -8,9 +7,9 @@ function App() {
   const [account, setAccount] = useState("");
   const [contract, setContract] = useState(null);
   const [provider, setProvider] = useState(null);
-  const [sensorCount, setSensorCount] = useState(0);
   const [sensors, setSensors] = useState([]);
   const [centralPool, setCentralPool] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadBlockchainData = async () => {
@@ -34,47 +33,32 @@ function App() {
 
       loadSensors(contractInstance);
     };
+
     loadBlockchainData();
   }, []);
 
   const loadSensors = async (contractInstance) => {
-    const count = await contractInstance.getSensorCount();
-    setSensorCount(count);
+    try {
+      setLoading(true);
 
-    let sensorData = [];
-    for (let i = 0; i < count; i++) {
-      const [id, weight] = await contractInstance.getSensor(i);
-      sensorData.push({ id, weight: weight });
-    }
-    setSensors(sensorData);
-
-    const pool = await contractInstance.getCentralWeightPool();
-    setCentralPool(pool);
-  };
-
-  const handleCsvUpload = async (parsedCsvData) => {
-    if (!contract) return;
-
-    for (const row of parsedCsvData) {
-      const sensorId = row.sensorId;
-      const moisture = parseInt(row.moisture);
-      const ph = parseInt(row.ph);
-
-      if (sensorId && !isNaN(moisture) && !isNaN(ph)) {
-        try {
-          const tx = await contract.addSensorReading(sensorId, moisture, ph);
-          await tx.wait();
-          console.log(`Sensor ${sensorId} added successfully.`);
-        } catch (error) {
-          console.error(`Failed to add sensor ${sensorId}:`, error);
-        }
-      } else {
-        console.warn("Invalid row skipped:", row);
+      // Get ranked sensor data from the contract
+      const [ids, weights] = await contractInstance.getRankedSensors();
+      const sensorData = [];
+      for (let i = 0; i < ids.length; i++) {
+        sensorData.push({
+          id: ids[i],
+          weight: parseFloat(weights[i].toString()),
+        });
       }
-    }
+      setSensors(sensorData);
 
-    alert("CSV Upload Complete!");
-    loadSensors(contract);
+      const pool = await contractInstance.getCentralWeightPool();
+      setCentralPool(pool.toString());
+    } catch (error) {
+      console.error("Error loading sensors:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -87,10 +71,7 @@ function App() {
           <p className="text-gray-700 mb-2 break-words">{account}</p>
 
           <h3 className="text-lg font-semibold mb-2">Central Weight Pool:</h3>
-          <p className="text-gray-700 mb-2">{centralPool.toString()}</p>
-
-          <h3 className="text-lg font-semibold mb-2">Total Sensors:</h3>
-          <p className="text-gray-700 mb-4">{sensorCount}</p>
+          <p className="text-gray-700 mb-2">{centralPool}</p>
 
           <button
             onClick={() => loadSensors(contract)}
@@ -108,33 +89,48 @@ function App() {
 
       {/* Bottom Section */}
       <div>
-        <h4 className="text-lg font-semibold mb-2">Sensor Rankings</h4>
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse border border-gray-300 shadow-lg">
-            <thead>
-              <tr className="bg-gray-200">
-                <th className="border border-gray-300 px-4 py-2">#</th>
-                <th className="border border-gray-300 px-4 py-2">Sensor ID</th>
-                <th className="border border-gray-300 px-4 py-2">Weight</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sensors.map((sensor, index) => (
-                <tr key={index} className="hover:bg-gray-100">
-                  <td className="border border-gray-300 px-4 py-2 text-center">
-                    {index + 1}
-                  </td>
-                  <td className="border border-gray-300 px-4 py-2">
-                    {sensor.id}
-                  </td>
-                  <td className="border border-gray-300 px-4 py-2">
-                    {sensor.weight.toString()}
-                  </td>
+        <h4 className="text-lg font-semibold mb-4">Sensor Rankings</h4>
+
+        {loading ? (
+          <p className="text-center text-gray-500">Loading sensors...</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse border border-gray-300 shadow-lg">
+              <thead>
+                <tr className="bg-gray-200">
+                  <th className="border border-gray-300 px-4 py-2">Rank</th>
+                  <th className="border border-gray-300 px-4 py-2">
+                    Sensor ID
+                  </th>
+                  <th className="border border-gray-300 px-4 py-2">Weight</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {sensors.length === 0 ? (
+                  <tr>
+                    <td colSpan="3" className="text-center py-4">
+                      No sensors found.
+                    </td>
+                  </tr>
+                ) : (
+                  sensors.map((sensor, index) => (
+                    <tr key={index} className="hover:bg-gray-100">
+                      <td className="border border-gray-300 px-4 py-2 text-center">
+                        {index + 1}
+                      </td>
+                      <td className="border border-gray-300 px-4 py-2 text-center">
+                        {sensor.id}
+                      </td>
+                      <td className="border border-gray-300 px-4 py-2 text-center">
+                        {sensor.weight}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
